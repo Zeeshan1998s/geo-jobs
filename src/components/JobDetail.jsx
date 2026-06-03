@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, Briefcase, MapPin, DollarSign, Award, ExternalLink, Bookmark, CheckCircle2, Route } from 'lucide-react';
+import { X, Briefcase, MapPin, Award, ExternalLink, Bookmark, CheckCircle2, Route, CheckCheck } from 'lucide-react';
 
-export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSaveToggle, onAddToItinerary, isInItinerary }) {
+export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSaveToggle, onAddToItinerary, isInItinerary, isApplied }) {
   if (!job) return null;
 
   const handleDirections = () => {
@@ -26,6 +26,11 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
           <div>
             <h4 className="detail-title">{job.title}</h4>
             <div className="detail-company">{job.company}</div>
+            {isApplied && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--accent-emerald)', marginTop: '3px', fontWeight: 600 }}>
+                <CheckCheck size={13} /> Application submitted
+              </div>
+            )}
           </div>
         </div>
 
@@ -82,10 +87,7 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
             onClick={() => onAddToItinerary && onAddToItinerary(job)}
             className={`clear-btn ${isInItinerary ? 'itinerary-active' : ''}`}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontSize: '0.85rem',
+              display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem',
               color: isInItinerary ? 'var(--accent-amber)' : undefined,
               borderColor: isInItinerary ? 'var(--accent-amber)' : undefined,
             }}
@@ -107,9 +109,7 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
               <Award size={16} className="instructions-icon" /> Requirements
             </div>
             <ul className="detail-list">
-              {job.requirements.map((req, idx) => (
-                <li key={idx}>{req}</li>
-              ))}
+              {job.requirements.map((req, idx) => <li key={idx}>{req}</li>)}
             </ul>
           </>
         )}
@@ -120,9 +120,7 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
               <CheckCircle2 size={16} className="instructions-icon" style={{ color: 'var(--accent-emerald)' }} /> Perks & Benefits
             </div>
             <ul className="detail-list">
-              {job.benefits.map((benefit, idx) => (
-                <li key={idx}>{benefit}</li>
-              ))}
+              {job.benefits.map((benefit, idx) => <li key={idx}>{benefit}</li>)}
             </ul>
           </>
         )}
@@ -136,9 +134,16 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
         >
           <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
         </button>
-        <button className="btn-apply" onClick={() => onApply(job)}>
-          Apply for Job
-        </button>
+
+        {isApplied ? (
+          <button className="btn-apply applied-btn" disabled>
+            <CheckCheck size={16} /> Applied ✓
+          </button>
+        ) : (
+          <button className="btn-apply" onClick={() => onApply(job)}>
+            Apply with Profile
+          </button>
+        )}
       </div>
     </div>
   );

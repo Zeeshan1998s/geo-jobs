@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sun, Moon, User, Flame, CircleDot, Route, X } from 'lucide-react';
+import { Sun, Moon, User, CircleDot, Route, X } from 'lucide-react';
 import { mockJobs } from '../data/mockJobs';
 import JobMap from '../components/JobMap';
 import Sidebar from '../components/Sidebar';
 import JobDetail from '../components/JobDetail';
 import AddJobModal from '../components/AddJobModal';
 import AuthModal from '../components/AuthModal';
+import ApplyModal from '../components/ApplyModal';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -55,9 +56,13 @@ export default function MapSearch() {
   const [isLightMode, setIsLightMode] = useState(false);
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const { user, logout } = useAuth();
+  const { user, logout, appliedJobIds } = useAuth();
   const navigate = useNavigate();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Apply Modal state
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [applyTargetJob, setApplyTargetJob] = useState(null);
 
   // ── Phase 4: Advanced Map Modes ────────────────────────────────────────────
   const [isNomadMode, setIsNomadMode] = useState(false);     // Remote heatmap
@@ -167,8 +172,16 @@ export default function MapSearch() {
   };
 
   const handleApply = (job) => {
-    if (!user) { setIsAuthModalOpen(true); return; }
-    triggerToast(`📨 Application sent to ${job.company} for "${job.title}"!`);
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setApplyTargetJob(job);
+    setIsApplyModalOpen(true);
+  };
+
+  const handleApplySuccess = () => {
+    triggerToast(`🎉 Application sent to ${applyTargetJob?.company}!`);
   };
 
   const handleAuthNav = () => {
@@ -369,6 +382,15 @@ export default function MapSearch() {
         onSaveToggle={handleSaveToggle}
         onAddToItinerary={handleAddToItinerary}
         isInItinerary={selectedJob ? itineraryJobs.some(j => j.id === selectedJob.id) : false}
+        isApplied={selectedJob ? appliedJobIds.includes(selectedJob.id) : false}
+      />
+
+      {/* One-Click Apply Modal */}
+      <ApplyModal
+        job={applyTargetJob}
+        isOpen={isApplyModalOpen}
+        onClose={() => setIsApplyModalOpen(false)}
+        onSuccess={handleApplySuccess}
       />
 
       {/* ── Add Job Modal ── */}
