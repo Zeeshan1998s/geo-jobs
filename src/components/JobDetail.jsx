@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, Briefcase, MapPin, DollarSign, Award, ExternalLink, Bookmark, CheckCircle2 } from 'lucide-react';
+import { X, Briefcase, MapPin, DollarSign, Award, ExternalLink, Bookmark, CheckCircle2, Route } from 'lucide-react';
 
-export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSaveToggle }) {
+export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSaveToggle, onAddToItinerary, isInItinerary }) {
   if (!job) return null;
 
   const handleDirections = () => {
@@ -57,25 +57,44 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
 
         {job.coordinates && (
           <div style={{ marginTop: '10px', marginBottom: '15px', borderRadius: '12px', overflow: 'hidden', height: '200px', border: '1px solid var(--panel-border)', background: 'var(--card-bg)' }}>
-            <iframe 
-              width="100%" 
-              height="100%" 
-              frameBorder="0" 
+            <iframe
+              width="100%"
+              height="100%"
+              frameBorder="0"
               style={{ border: 0 }}
-              src={`https://maps.google.com/maps?q=${job.coordinates.lat},${job.coordinates.lng}&layer=c&cbll=${job.coordinates.lat},${job.coordinates.lng}&cbp=11,0,0,0,0&output=svembed`} 
-              allowFullScreen 
+              src={`https://maps.google.com/maps?q=${job.coordinates.lat},${job.coordinates.lng}&layer=c&cbll=${job.coordinates.lat},${job.coordinates.lng}&cbp=11,0,0,0,0&output=svembed`}
+              allowFullScreen
               title="Street View"
             ></iframe>
           </div>
         )}
 
-        <button 
-          onClick={handleDirections}
-          className="clear-btn" 
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', marginBottom: '15px' }}
-        >
-          Get directions on map <ExternalLink size={12} />
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '15px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleDirections}
+            className="clear-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem' }}
+          >
+            Get directions <ExternalLink size={12} />
+          </button>
+
+          <button
+            onClick={() => onAddToItinerary && onAddToItinerary(job)}
+            className={`clear-btn ${isInItinerary ? 'itinerary-active' : ''}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '0.85rem',
+              color: isInItinerary ? 'var(--accent-amber)' : undefined,
+              borderColor: isInItinerary ? 'var(--accent-amber)' : undefined,
+            }}
+            title={isInItinerary ? 'Remove from Interview Route' : 'Add to Interview Route'}
+          >
+            <Route size={12} />
+            {isInItinerary ? '✓ In Route' : '+ Add to Route'}
+          </button>
+        </div>
 
         <div className="detail-section-title">
           <Briefcase size={16} className="instructions-icon" /> Role Description
@@ -110,8 +129,8 @@ export default function JobDetail({ job, isOpen, onClose, onApply, isSaved, onSa
       </div>
 
       <div className="detail-footer">
-        <button 
-          className={`btn-bookmark ${isSaved ? 'saved' : ''}`} 
+        <button
+          className={`btn-bookmark ${isSaved ? 'saved' : ''}`}
           onClick={() => onSaveToggle(job.id)}
           title={isSaved ? "Saved to bookmarks" : "Save job"}
         >

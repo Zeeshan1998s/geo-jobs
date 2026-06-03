@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sun, Moon, User } from 'lucide-react';
+import { Sun, Moon, User, Flame, CircleDot, Route, X } from 'lucide-react';
 import { mockJobs } from '../data/mockJobs';
 import JobMap from '../components/JobMap';
 import Sidebar from '../components/Sidebar';
@@ -10,38 +10,34 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export default function MapSearch() {
-  // Load custom jobs from local storage
+  // ── Custom Jobs (localStorage) ─────────────────────────────────────────────
   const [customJobs, setCustomJobs] = useState(() => {
     try {
       const saved = localStorage.getItem('geojobs_custom');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.error('Failed to parse custom jobs from localStorage:', e);
       return [];
     }
   });
 
-  // Combine mock data and custom pins
-  const allJobs = useMemo(() => {
-    return [...mockJobs, ...customJobs];
-  }, [customJobs]);
+  const allJobs = useMemo(() => [...mockJobs, ...customJobs], [customJobs]);
 
-  // Map coordinate center tracking
+  // ── Map Control ────────────────────────────────────────────────────────────
   const [centerTo, setCenterTo] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [mapBounds, setMapBounds] = useState(null);
 
-  // Search & filter states
+  // ── Search & Filter ────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
 
-  // Interactive panels/drawers
+  // ── Panels ─────────────────────────────────────────────────────────────────
   const [selectedJob, setSelectedJob] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [clickedCoords, setClickedCoords] = useState(null);
 
-  // Saved/Bookmarked jobs
+  // ── Bookmarks ──────────────────────────────────────────────────────────────
   const [savedJobIds, setSavedJobIds] = useState(() => {
     try {
       const saved = localStorage.getItem('geojobs_saved');
@@ -51,89 +47,96 @@ export default function MapSearch() {
     }
   });
 
-  // Toast Notification state
+  // ── Toast ──────────────────────────────────────────────────────────────────
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  // Theme state
+  // ── Theme ──────────────────────────────────────────────────────────────────
   const [isLightMode, setIsLightMode] = useState(false);
 
-  // Auth Context
+  // ── Auth ───────────────────────────────────────────────────────────────────
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // ── Phase 4: Advanced Map Modes ────────────────────────────────────────────
+  const [isNomadMode, setIsNomadMode] = useState(false);     // Remote heatmap
+  const [isCommuteMode, setIsCommuteMode] = useState(false); // Commute radius circle
+  const [commuteRadiusKm, setCommuteRadiusKm] = useState(5); // Default 5km
+  const [itineraryJobs, setItineraryJobs] = useState([]);    // Multi-interview route
+
+  // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.classList.toggle('light-mode', isLightMode);
   }, [isLightMode]);
 
-  // Sync bookmarks to localStorage
   useEffect(() => {
     localStorage.setItem('geojobs_saved', JSON.stringify(savedJobIds));
   }, [savedJobIds]);
 
-  // Sync custom jobs to localStorage
   useEffect(() => {
     localStorage.setItem('geojobs_custom', JSON.stringify(customJobs));
   }, [customJobs]);
 
-  // Toast trigger helper
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const triggerToast = (message) => {
     setToastMessage(message);
     setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
-  // Filter jobs based on search query & industry category
+  // ── Filtering ──────────────────────────────────────────────────────────────
   const filteredJobs = useMemo(() => {
     return allJobs.filter((job) => {
       const matchesSearch =
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.location.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesCategory =
-        activeCategory === 'All' || job.industry === activeCategory;
-
+      const matchesCategory = activeCategory === 'All' || job.industry === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [allJobs, searchQuery, activeCategory]);
 
-  // Filter jobs based on active Map Viewport boundaries
+  // Commute-radius filtered jobs (when commute mode active)
   const visibleJobs = useMemo(() => {
-    if (!mapBounds) return filteredJobs;
-    
-    const { southWest, northEast } = mapBounds;
-    
-    return filteredJobs.filter((job) => {
-      const { lat, lng } = job.coordinates;
-      return (
-        lat >= southWest.lat &&
-        lat <= northEast.lat &&
-        lng >= southWest.lng &&
-        lng <= northEast.lng
-      );
-    });
-  }, [filteredJobs, mapBounds]);
+    let base = filteredJobs;
 
-  // Select job card -> Pan map and slide open details panel
+    if (isCommuteMode && userLocation) {
+      const R = 6371; // Earth radius km
+      base = base.filter((job) => {
+        const dLat = (job.coordinates.lat - userLocation.lat) * Math.PI / 180;
+        const dLng = (job.coordinates.lng - userLocation.lng) * Math.PI / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(userLocation.lat * Math.PI / 180) *
+          Math.cos(job.coordinates.lat * Math.PI / 180) *
+          Math.sin(dLng / 2) ** 2;
+        const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return dist <= commuteRadiusKm;
+      });
+    } else if (mapBounds) {
+      const { southWest, northEast } = mapBounds;
+      base = base.filter((job) => {
+        const { lat, lng } = job.coordinates;
+        return lat >= southWest.lat && lat <= northEast.lat && lng >= southWest.lng && lng <= northEast.lng;
+      });
+    }
+
+    return base;
+  }, [filteredJobs, mapBounds, isCommuteMode, userLocation, commuteRadiusKm]);
+
+  // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSelectJob = (job) => {
     setSelectedJob(job);
     setIsDetailOpen(true);
-    
-    // Pan map to job coordinates
     setCenterTo({ lat: job.coordinates.lat, lng: job.coordinates.lng, zoom: 15 });
   };
 
-  // double click map to open add job modal
   const handleMapDoubleClick = (coords) => {
     setClickedCoords(coords);
     setIsAddModalOpen(true);
   };
 
-  // Click standard post button -> Default to map center
   const handlePostJobBtnClick = () => {
     if (mapBounds) {
       const center = {
@@ -147,38 +150,24 @@ export default function MapSearch() {
     setIsAddModalOpen(true);
   };
 
-  // Handle new job submission
   const handleAddJob = (newJob) => {
     setCustomJobs((prev) => [newJob, ...prev]);
     triggerToast(`🚀 Pin added: "${newJob.title}" published successfully!`);
-    
-    // Auto-select the newly added job
-    setTimeout(() => {
-      handleSelectJob(newJob);
-    }, 300);
+    setTimeout(() => handleSelectJob(newJob), 300);
   };
 
-  // Handle bookmarking
   const handleSaveToggle = (jobId) => {
     let saved = false;
     setSavedJobIds((prev) => {
-      if (prev.includes(jobId)) {
-        return prev.filter((id) => id !== jobId);
-      } else {
-        saved = true;
-        return [...prev, jobId];
-      }
+      if (prev.includes(jobId)) return prev.filter((id) => id !== jobId);
+      saved = true;
+      return [...prev, jobId];
     });
-
     triggerToast(saved ? "⭐ Added to saved bookmarks!" : "Removed from bookmarks.");
   };
 
-  // Handle job application submission
   const handleApply = (job) => {
-    if (!user) {
-      setIsAuthModalOpen(true);
-      return;
-    }
+    if (!user) { setIsAuthModalOpen(true); return; }
     triggerToast(`📨 Application sent to ${job.company} for "${job.title}"!`);
   };
 
@@ -195,9 +184,36 @@ export default function MapSearch() {
     setActiveCategory('All');
   };
 
+  // ── Itinerary Handlers ─────────────────────────────────────────────────────
+  const handleAddToItinerary = (job) => {
+    setItineraryJobs((prev) => {
+      const exists = prev.some(j => j.id === job.id);
+      if (exists) {
+        triggerToast(`🗺️ Removed "${job.title}" from interview route.`);
+        return prev.filter(j => j.id !== job.id);
+      }
+      triggerToast(`🗺️ Added "${job.title}" to your interview route!`);
+      return [...prev, job];
+    });
+  };
+
+  const clearItinerary = () => {
+    setItineraryJobs([]);
+    triggerToast('Interview route cleared.');
+  };
+
+  // ── Commute Mode Toggle ────────────────────────────────────────────────────
+  const handleCommuteToggle = () => {
+    if (!userLocation && !isCommuteMode) {
+      triggerToast('📍 Enable location access to use Commute Radius.');
+      return;
+    }
+    setIsCommuteMode(prev => !prev);
+  };
+
   return (
     <div className="app-container">
-      {/* Map Engine (Leaflet integration) */}
+      {/* Map Engine */}
       <JobMap
         jobs={filteredJobs}
         selectedJob={selectedJob}
@@ -209,36 +225,77 @@ export default function MapSearch() {
         userLocation={userLocation}
         setUserLocation={setUserLocation}
         isLightMode={isLightMode}
+        isNomadMode={isNomadMode}
+        isCommuteMode={isCommuteMode}
+        commuteRadiusKm={commuteRadiusKm}
+        itineraryJobs={itineraryJobs}
       />
 
-      {/* Floating Top Dashboard Header */}
+      {/* ── Floating Top Dashboard Header ── */}
       <header className="map-header-overlay">
         <div className="stats-container">
           <span className="stat-item">
             <span className="stat-count">{allJobs.length}</span> Total Jobs
           </span>
           <span className="stat-item">
-            <span className="stat-count">{visibleJobs.length}</span> In Viewport
+            <span className="stat-count">{visibleJobs.length}</span>
+            {isCommuteMode ? ` Within ${commuteRadiusKm}km` : ' In Viewport'}
           </span>
         </div>
-        
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className="btn-post-job" 
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {/* Nomad Mode Toggle */}
+          <button
+            className={`btn-post-job map-mode-btn ${isNomadMode ? 'mode-active' : ''}`}
+            onClick={() => setIsNomadMode(prev => !prev)}
+            title="Remote Nomad Heatmap Mode"
+          >
+            🌍 {isNomadMode ? 'Exit Nomad' : 'Nomad Mode'}
+          </button>
+
+          {/* Commute Radius Toggle */}
+          <button
+            className={`btn-post-job map-mode-btn ${isCommuteMode ? 'mode-active' : ''}`}
+            onClick={handleCommuteToggle}
+            title="Commute Radius Filter"
+          >
+            <CircleDot size={14} />
+            {isCommuteMode ? `${commuteRadiusKm}km Zone ✓` : 'Commute Zone'}
+          </button>
+
+          {/* Commute radius slider (visible only in commute mode) */}
+          {isCommuteMode && (
+            <div className="radius-slider-wrap">
+              <input
+                type="range"
+                min={1}
+                max={50}
+                value={commuteRadiusKm}
+                onChange={e => setCommuteRadiusKm(Number(e.target.value))}
+                className="radius-slider"
+                title={`Radius: ${commuteRadiusKm}km`}
+              />
+            </div>
+          )}
+
+          {/* Light/Dark toggle */}
+          <button
+            className="btn-post-job"
             style={{ background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--panel-border)', boxShadow: 'none' }}
             onClick={() => setIsLightMode(!isLightMode)}
             title="Toggle Light/Dark Mode"
           >
             {isLightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
-          
-          <button 
-            className="btn-post-job" 
+
+          {/* Auth / Dashboard button */}
+          <button
+            className="btn-post-job"
             style={{ background: 'var(--card-bg)', color: 'var(--text-primary)', border: '1px solid var(--panel-border)' }}
             onClick={handleAuthNav}
           >
             {user ? (
-              <><span style={{fontSize:'1.1rem'}}>{user.avatar}</span> Dashboard</>
+              <><span style={{ fontSize: '1.1rem' }}>{user.avatar}</span> Dashboard</>
             ) : (
               <><User size={16} /> Sign In</>
             )}
@@ -252,7 +309,38 @@ export default function MapSearch() {
         </div>
       </header>
 
-      {/* Left Glassmorphic Navigation & Listings Sidebar */}
+      {/* ── Itinerary Panel (floats bottom-center) ── */}
+      {itineraryJobs.length > 0 && (
+        <div className="itinerary-panel">
+          <div className="itinerary-header">
+            <Route size={16} />
+            <span>Interview Route ({itineraryJobs.length} stops)</span>
+            <button className="btn-close" onClick={clearItinerary} style={{ marginLeft: 'auto' }}>
+              <X size={14} />
+            </button>
+          </div>
+          <div className="itinerary-stops">
+            {itineraryJobs.map((job, i) => (
+              <div key={job.id} className="itinerary-stop" onClick={() => handleSelectJob(job)}>
+                <span className="stop-number">{i + 1}</span>
+                <div className="stop-info">
+                  <span className="stop-title">{job.title}</span>
+                  <span className="stop-company">{job.company}</span>
+                </div>
+                <button
+                  className="stop-remove"
+                  onClick={(e) => { e.stopPropagation(); handleAddToItinerary(job); }}
+                  title="Remove from route"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Left Sidebar ── */}
       <Sidebar
         visibleJobs={visibleJobs}
         totalJobsCount={filteredJobs.length}
@@ -265,26 +353,25 @@ export default function MapSearch() {
         onResetFilters={handleResetFilters}
       />
 
-      {/* Map Double-Click Usage Help Bar */}
+      {/* ── Instructions Bar ── */}
       <div className="instructions-overlay">
         <span className="instructions-icon">💡</span>
         <span>Double-click anywhere on the map to pin a new job at that exact building!</span>
       </div>
 
-      {/* Right Drawer Slide Details View */}
+      {/* ── Job Detail Drawer ── */}
       <JobDetail
         job={selectedJob}
         isOpen={isDetailOpen}
-        onClose={() => {
-          setIsDetailOpen(false);
-          setSelectedJob(null);
-        }}
+        onClose={() => { setIsDetailOpen(false); setSelectedJob(null); }}
         onApply={handleApply}
         isSaved={selectedJob ? savedJobIds.includes(selectedJob.id) : false}
         onSaveToggle={handleSaveToggle}
+        onAddToItinerary={handleAddToItinerary}
+        isInItinerary={selectedJob ? itineraryJobs.some(j => j.id === selectedJob.id) : false}
       />
 
-      {/* Custom Job Creation Modal Popup */}
+      {/* ── Add Job Modal ── */}
       {isAddModalOpen && (
         <AddJobModal
           isOpen={isAddModalOpen}
@@ -294,13 +381,10 @@ export default function MapSearch() {
         />
       )}
 
-      {/* Global Authentication Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
+      {/* ── Auth Modal ── */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
 
-      {/* Custom Popup Toast Alert */}
+      {/* ── Toast Notification ── */}
       <div className={`toast-notification ${showToast ? 'show' : ''}`}>
         <span>{toastMessage}</span>
       </div>

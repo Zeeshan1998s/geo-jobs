@@ -1044,3 +1044,215 @@ body {
     border-width: 1px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 4 — Advanced Map Features Styles
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Map Mode Toggle Buttons ────────────────────────────────── */
+.map-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  padding: 8px 14px;
+  transition: var(--transition-smooth);
+}
+
+.map-mode-btn.mode-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(16, 185, 129, 0.25)) !important;
+  border-color: var(--accent-purple) !important;
+  color: var(--accent-purple) !important;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.35) !important;
+}
+
+/* ── Commute Radius Slider ──────────────────────────────────── */
+.radius-slider-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  backdrop-filter: var(--panel-blur);
+}
+
+.radius-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 90px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--accent-purple), var(--accent-emerald));
+  outline: none;
+  cursor: pointer;
+}
+
+.radius-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.7);
+  cursor: pointer;
+  border: 2px solid var(--accent-purple);
+}
+
+/* ── Itinerary Floating Panel ───────────────────────────────── */
+.itinerary-panel {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.2);
+  min-width: 320px;
+  max-width: 480px;
+  overflow: hidden;
+  animation: slideUpPanel 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpPanel {
+  from { transform: translateX(-50%) translateY(30px); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.itinerary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f59e0b;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  letter-spacing: 0.02em;
+}
+
+.itinerary-stops {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.itinerary-stops::-webkit-scrollbar {
+  display: none;
+}
+
+.itinerary-stop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-bg);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  min-width: 160px;
+  max-width: 200px;
+  flex-shrink: 0;
+}
+
+.itinerary-stop:hover {
+  background: var(--card-hover-bg);
+  border-color: rgba(245, 158, 11, 0.5);
+  transform: translateY(-2px);
+}
+
+.stop-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.stop-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.stop-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stop-company {
+  font-size: 0.65rem;
+  color: var(--accent-emerald);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stop-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.stop-remove:hover {
+  color: var(--accent-crimson);
+}
+
+/* ── Itinerary Numbered Markers ─────────────────────────────── */
+.itinerary-marker {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  border: 2px solid white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.6);
+  font-family: var(--font-title);
+}
+
+/* ── JobDetail itinerary-active button ──────────────────────── */
+.clear-btn.itinerary-active {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+/* Add amber accent CSS variable */
+:root {
+  --accent-amber: #f59e0b;
+}
+

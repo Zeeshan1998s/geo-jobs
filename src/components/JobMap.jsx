@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
-import { MapPin, Compass } from 'lucide-react';
 
-// Setup custom Leaflet DivIcons for style customization and to avoid asset loading bugs in Vite.
+// ─── Custom Marker Icons ────────────────────────────────────────────────────
+
 const createJobIcon = (emoji, isActive, isLiveEvent) => {
   if (isLiveEvent) {
     return L.divIcon({
@@ -30,6 +30,14 @@ const createJobIcon = (emoji, isActive, isLiveEvent) => {
   });
 };
 
+const itineraryIcon = (index) => L.divIcon({
+  html: `<div class="itinerary-marker">${index}</div>`,
+  className: 'custom-leaflet-icon',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -15]
+});
+
 const userIcon = L.divIcon({
   html: '<div class="user-location-marker" title="You are here"></div>',
   className: 'user-leaflet-icon',
@@ -37,19 +45,53 @@ const userIcon = L.divIcon({
   iconAnchor: [12, 12]
 });
 
-const createClusterCustomIcon = function (cluster) {
-  return L.divIcon({
+const createClusterCustomIcon = (cluster) =>
+  L.divIcon({
     html: `<div class="cluster-marker"><span>${cluster.getChildCount()}</span></div>`,
     className: 'custom-leaflet-cluster',
     iconSize: L.point(40, 40, true),
   });
-};
 
-// A sub-component to handle map movements and double-clicks
+// ─── Heatmap Layer (vanilla leaflet.heat) ───────────────────────────────────
+
+function HeatmapLayer({ jobs }) {
+  const map = useMap();
+  const heatRef = useRef(null);
+
+  useEffect(() => {
+    if (!window.L || !window.L.heatLayer) return;
+
+    const points = jobs
+      .filter(j => j.type === 'Remote' || j.type === 'Contract' || j.type === 'Freelance')
+      .map(j => [j.coordinates.lat, j.coordinates.lng, 0.9]);
+
+    if (heatRef.current) {
+      map.removeLayer(heatRef.current);
+    }
+
+    heatRef.current = window.L.heatLayer(points, {
+      radius: 35,
+      blur: 20,
+      maxZoom: 10,
+      gradient: { 0.2: '#00d4ff', 0.5: '#7c3aed', 0.8: '#f59e0b', 1.0: '#ef4444' }
+    }).addTo(map);
+
+    return () => {
+      if (heatRef.current) {
+        map.removeLayer(heatRef.current);
+        heatRef.current = null;
+      }
+    };
+  }, [map, jobs]);
+
+  return null;
+}
+
+// ─── Map Controller ─────────────────────────────────────────────────────────
+
 function MapController({ onBoundsChange, onMapDoubleClick, centerTo }) {
   const map = useMap();
 
-  // Handle programmatic zooming/panning
   useEffect(() => {
     if (centerTo) {
       map.setView([centerTo.lat, centerTo.lng], centerTo.zoom || 15, {
@@ -59,7 +101,6 @@ function MapController({ onBoundsChange, onMapDoubleClick, centerTo }) {
     }
   }, [centerTo, map]);
 
-  // Report initial bounds once map is ready
   useEffect(() => {
     const reportBounds = () => {
       const bounds = map.getBounds();
@@ -68,13 +109,10 @@ function MapController({ onBoundsChange, onMapDoubleClick, centerTo }) {
         northEast: { lat: bounds.getNorthEast().lat, lng: bounds.getNorthEast().lng }
       });
     };
-    
-    // Give leaflet a millisecond to draw, then report
     const timer = setTimeout(reportBounds, 100);
     return () => clearTimeout(timer);
   }, [map, onBoundsChange]);
 
-  // Register map event listeners
   useMapEvents({
     moveend: () => {
       const bounds = map.getBounds();
@@ -91,16 +129,14 @@ function MapController({ onBoundsChange, onMapDoubleClick, centerTo }) {
       });
     },
     dblclick: (e) => {
-      // Trigger new job creation
-      onMapDoubleClick({
-        lat: e.latlng.lat,
-        lng: e.latlng.lng
-      });
+      onMapDoubleClick({ lat: e.latlng.lat, lng: e.latlng.lng });
     }
   });
 
   return null;
 }
+
+// ─── Main JobMap Component ───────────────────────────────────────────────────
 
 export default function JobMap({
   jobs,
@@ -112,35 +148,40 @@ export default function JobMap({
   setCenterTo,
   userLocation,
   setUserLocation,
-  isLightMode
+  isLightMode,
+  isNomadMode,
+  isCommuteMode,
+  commuteRadiusKm,
+  itineraryJobs,
 }) {
-  const defaultCenter = [20, 0]; // World view
+  const defaultCenter = [20, 0];
   const defaultZoom = 2.5;
 
-  // Prompt user for geolocation
+  // Prompt user for geolocation on mount
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const coords = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
+          const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
           setUserLocation(coords);
-          // Set map camera view to center on user
           setCenterTo({ lat: coords.lat, lng: coords.lng, zoom: 11 });
         },
-        (error) => {
-          console.warn('Geolocation failed or denied by user:', error.message);
-          // Default center: Hyderabad, India
+        () => {
           setCenterTo({ lat: 17.44829, lng: 78.39148, zoom: 12 });
         }
       );
     } else {
-      // Fallback
       setCenterTo({ lat: 17.44829, lng: 78.39148, zoom: 12 });
     }
   }, [setUserLocation, setCenterTo]);
+
+  // Build itinerary polyline positions: userLocation -> each stop in order
+  const routePositions = itineraryJobs && itineraryJobs.length > 0
+    ? [
+        userLocation ? [userLocation.lat, userLocation.lng] : [17.44829, 78.39148],
+        ...itineraryJobs.map(j => [j.coordinates.lat, j.coordinates.lng])
+      ]
+    : [];
 
   return (
     <div className="map-wrapper">
@@ -148,12 +189,12 @@ export default function JobMap({
         center={defaultCenter}
         zoom={defaultZoom}
         zoomControl={true}
-        doubleClickZoom={false} // Disable double click zoom so we can double click to add pins
+        doubleClickZoom={false}
         style={{ width: '100%', height: '100%' }}
       >
-        {/* Sleek Dark Matter or Positron Maps Tiles from CartoDB */}
+        {/* Map tile layer */}
         <TileLayer
-          url={isLightMode 
+          url={isLightMode
             ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           }
@@ -161,56 +202,97 @@ export default function JobMap({
           maxZoom={20}
         />
 
-        {/* User Geolocation Pulse Marker */}
+        {/* User location marker */}
         {userLocation && (
           <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
             <Popup className="dark-popup">
-              <div style={{ textAlign: 'center', fontWeight: 600 }}>Your Location</div>
+              <div style={{ textAlign: 'center', fontWeight: 600 }}>📍 Your Location</div>
             </Popup>
           </Marker>
         )}
 
-        {/* Job Pins wrapped in MarkerClusterGroup */}
-        <MarkerClusterGroup
-          chunkedLoading
-          spiderfyOnMaxZoom={true}
-          iconCreateFunction={createClusterCustomIcon}
-          maxClusterRadius={45}
-        >
-          {jobs.map((job) => {
-            const isActive = selectedJob && selectedJob.id === job.id;
-            return (
+        {/* ── Commute Radius Circle ── */}
+        {isCommuteMode && userLocation && (
+          <Circle
+            center={[userLocation.lat, userLocation.lng]}
+            radius={commuteRadiusKm * 1000}
+            pathOptions={{
+              color: '#7c3aed',
+              fillColor: '#7c3aed',
+              fillOpacity: 0.08,
+              weight: 2,
+              dashArray: '8 4'
+            }}
+          />
+        )}
+
+        {/* ── Nomad Heatmap (leaflet.heat loaded via script tag) ── */}
+        {isNomadMode && <HeatmapLayer jobs={jobs} />}
+
+        {/* ── Job Pins (hidden in nomad mode to show pure heatmap) ── */}
+        {!isNomadMode && (
+          <MarkerClusterGroup
+            chunkedLoading
+            spiderfyOnMaxZoom={true}
+            iconCreateFunction={createClusterCustomIcon}
+            maxClusterRadius={45}
+          >
+            {jobs.map((job) => {
+              const isActive = selectedJob && selectedJob.id === job.id;
+              return (
+                <Marker
+                  key={job.id}
+                  position={[job.coordinates.lat, job.coordinates.lng]}
+                  icon={createJobIcon(job.logo, isActive, job.isLiveEvent)}
+                  eventHandlers={{ click: () => onSelectJob(job) }}
+                >
+                  <Popup className="dark-popup">
+                    <div style={{ padding: '2px' }}>
+                      <h4 style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '2px', color: 'var(--text-primary)' }}>
+                        {job.title}
+                      </h4>
+                      <p style={{ color: 'var(--accent-emerald)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px' }}>
+                        {job.company}
+                      </p>
+                      <div style={{ display: 'flex', gap: '5px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        <span>{job.salary}</span><span>•</span><span>{job.type}</span>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+          </MarkerClusterGroup>
+        )}
+
+        {/* ── Itinerary Route Polyline ── */}
+        {routePositions.length > 1 && (
+          <>
+            <Polyline
+              positions={routePositions}
+              pathOptions={{
+                color: '#f59e0b',
+                weight: 3,
+                opacity: 0.85,
+                dashArray: '10 5'
+              }}
+            />
+            {/* Numbered stop markers */}
+            {itineraryJobs.map((job, i) => (
               <Marker
-                key={job.id}
+                key={`itin-${job.id}`}
                 position={[job.coordinates.lat, job.coordinates.lng]}
-                icon={createJobIcon(job.logo, isActive, job.isLiveEvent)}
-                eventHandlers={{
-                  click: () => {
-                    onSelectJob(job);
-                  }
-                }}
+                icon={itineraryIcon(i + 1)}
               >
                 <Popup className="dark-popup">
-                  <div style={{ padding: '2px' }}>
-                    <h4 style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '2px', color: 'var(--text-primary)' }}>
-                      {job.title}
-                    </h4>
-                    <p style={{ color: 'var(--accent-emerald)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px' }}>
-                      {job.company}
-                    </p>
-                    <div style={{ display: 'flex', gap: '5px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                      <span>{job.salary}</span>
-                      <span>•</span>
-                      <span>{job.type}</span>
-                    </div>
-                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Stop {i + 1}: {job.title}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)' }}>{job.company}</div>
                 </Popup>
               </Marker>
-            );
-          })}
-        </MarkerClusterGroup>
+            ))}
+          </>
+        )}
 
-        {/* Map Controller for movement and clicks */}
         <MapController
           onBoundsChange={onBoundsChange}
           onMapDoubleClick={onMapDoubleClick}
